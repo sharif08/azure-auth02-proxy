@@ -1,0 +1,23 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: kubeclarity
+  namespace: kubeclarity  # Replace <namespace> with your desired namespace
+spec:
+  chart:
+    spec:
+      # Ref: https://github.com/openclarity/kubeclarity/tree/main/charts/kubeclarity
+      chart: kubeclarity
+      interval: 10m
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: HelmRepository
+        name: kubeclarity
+        namespace: flux-system
+      version: '*'
+  interval: 1h0m0s
+  valuesFrom:
+    - kind: ConfigMap
+      name: helm-values-configmap
+      valuesKey: values.yaml

@@ -1,0 +1,249 @@
+#######################################################################################
+## Global Values
+
+global:
+  ## Docker image
+  ##
+  docker:
+    ## Configure registry
+    ##
+    registry: "ghcr.io/openclarity"
+    tag: "v2.23.1"
+    imagePullPolicy: Always
+
+
+## KubeClarity Values
+
+kubeclarity:
+  ## Docker Image values.
+  docker:
+    ## Use to overwrite the global docker params
+    ##
+    imageName: ""
+
+  ## Logging level (debug, info, warning, error, fatal, panic).
+  logLevel: warning
+
+  enableDBInfoLog: false
+
+  prometheus:
+    enabled: false
+    serviceMonitor:
+      enabled: false
+      interval: 30s
+      annotations: {}
+      labels: {}
+    refreshIntervalSeconds: 300
+
+
+  service:
+    type: ClusterIP
+    port: 8080
+    annotations: {}
+
+  ingress:
+    # Be careful when using ingress. As there is no authentication on Kubeclarity yet, your instance may be accessible.
+    # Make sure the ingress remains internal if you decide to enable it.
+    enabled: true
+    labels: {}
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/auth-url: "https://kubeclarity.test.com/oauth2/auth"
+      nginx.ingress.kubernetes.io/auth-signin: "https://kubeclarity.test.com/oauth2/start?rd=$request_uri"
+      nginx.ingress.kubernetes.io/auth-response-headers: "Authorization"
+
+    # Optionally use ingressClassName instead of deprecated annotation.
+    # See: https://kubernetes.io/docs/concepts/services-networking/ingress/#deprecated-annotation
+    ingressClassName: "nginx"
+
+    hosts:
+        # hostname you want to use
+      - host: kubeclarity.devops.tributech-node.com
+        # paths will default to:
+        paths:
+          - pathType: ImplementationSpecific
+            path: /
+        # paths: []
+
+    tls: 
+     - secretName: kubeclarity.devops.tributech-node.com-tls
+       hosts:
+         - kubeclarity.devops.tributech-node.com
+
+#######################################################################################
+## KubeClarity Runtime Scan Values
+
+kubeclarity-runtime-scan:
+  httpsProxy: ""
+  httpProxy: ""
+  resultServicePort: 8888
+
+  ## Scanner jobs and pods labels.
+  labels:
+    app: kubeclarity-scanner
+    sidecar.istio.io/inject: "false"
+
+  ## Scanner jobs namespace.
+  # If left blank, the scanner jobs will run in the same namespace as pod being scanned.
+  # If set, the scanner jobs will run in the given namespace unless:
+  # 1. The scanner job must run in the pod namespace to fetch image pull secrets, OR
+  # 2. The scanner job must run in the release namespace to fetch service credentials (more info in https://github.com/openclarity/kubeclarity#private-registries-support-for-k8s-runtime-scan)
+  namespace: ""
+
+  vulnerability-scanner:
+    ## Analyzer config.
+    analyzer:
+      ## Space seperated list of analyzers. (syft gomod)
+      analyzerList: "syft gomod"
+
+      analyzerScope: "squashed"
+
+      trivy:
+        ## Enable trivy analyzer, if true make sure to add it to analyzerList above
+        ##
+        enabled: true
+        timeout: "300"
+
+    ## Scanner config.
+    scanner:
+      ## Space seperated list of scanners. (grype dependency-track)
+      scannerList: "grype"
+
+      grype:
+        ## Enable grype scanner, if true make sure to add it to scannerList above
+        ##
+        enabled: true
+        ## Grype scanner mode. (LOCAL, REMOTE)
+        mode: "REMOTE"
+
+        ## Remote grype scanner config.
+        remote-grype:
+          timeout: "2m"
+
+      dependency-track:
+        ## Enable dependency-track scanner, if true make sure to add it to scannerList above
+        ##
+        enabled: false
+        insecureSkipVerify: "true"
+        disableTls: "true"
+        apiserverAddress: "dependency-track-apiserver.dependency-track"
+        apiKey: ""
+
+      trivy:
+        ## Enable trivy scanner, if true make sure to add it to scannerList above.
+        ## To guarentee reliable scans, also ensure that the trivy analyzer is enabled.
+        ##
+        enabled: true
+        timeout: "300"
+
+
+## End of KubeClarity Runtime Scan Values
+#######################################################################################
+
+#######################################################################################
+## KubeClarity Grype Server Values
+
+kubeclarity-grype-server:
+  enabled: true
+
+  ## Docker Image values.
+  docker:
+    imageRepo: "ghcr.io/openclarity"
+    imageTag: "v0.6.0"
+    imagePullPolicy: Always
+
+#######################################################################################
+## KubeClarity Trivy Server Values
+## https://github.com/aquasecurity/trivy/blob/main/helm/trivy/values.yaml
+
+kubeclarity-trivy-server:
+  enabled: true
+
+  ## Docker Image values.
+  image:
+    registry: docker.io
+    repository: aquasec/trivy
+    tag: 0.44.1
+    pullPolicy: IfNotPresent
+
+  trivy:
+    debugMode: true
+
+  service:
+    port: 9992
+
+#######################################################################################
+## KubeClarity SBOM DB Values
+
+kubeclarity-sbom-db:
+  ## Logging level (debug, info, warning, error, fatal, panic).
+  logLevel: warning
+
+  servicePort: 8080
+
+#######################################################################################
+## KubeClarity Internal Postgres Values
+## Use kubeclarity-postgresql if you want this chart to deploy a PostgreSQL instance
+kubeclarity-postgresql:
+  enabled: true
+
+  ## Specify posgtresql image
+  image:
+    registry: docker.io
+    repository: bitnami/postgresql
+    tag: 14.6.0-debian-11-r31
+
+  ## initdb parameters
+  # initdb:
+    ##  ConfigMap with scripts to be run at first boot
+    ##  NOTE: This will override initdb.scripts
+    # scriptsConfigMap
+    ##  Secret with scripts to be run at first boot (in case it contains sensitive information)
+    ##  NOTE: This can work along initdbScripts or initdbScriptsConfigMap
+    # scriptsSecret:
+    ## Specify the PostgreSQL username and password to execute the initdb scripts
+    # user:
+    # password:
+
+  ## Setup database name and password
+  auth:
+    existingSecret: kubeclarity-postgresql-secret-local
+    username: postgres
+    database: kubeclarity
+    sslMode: disable
+
+  service:
+    ports:
+      postgresql: 5432
+
+#######################################################################################
+
+# Use kubeclarity-postgresql-external if you want to reach an already existing PostgreSQL instance
+kubeclarity-postgresql-external:
+  enabled: false
+  auth:
+    existingSecret: kubeclarity-postgresql-secret
+    username: kubeclarity
+    host: pgsql.hostname  # replace this to reach your PostgreSQL instance
+    port: 5432
+    database: kubeclarity
+    sslMode: disable
+
+# PostgreSQL connection information
+kubeclarity-postgresql-secret:
+  # Set create to true if you want this helm chart to create a secret holding pgsql password
+  # based on global.databasePassword value
+  # If create is set to false, a secret should already exist which contains the following keys:
+  # PostgreSQL password under secretKey
+  # PostgreSQL username under usernameKey
+  # PostgreSQL host under hostKey
+  # PostgreSQL port under portKey
+  # PostgreSQL database name under databaseKey
+  # SSL mode under sslmodeKey (disable/enable)
+  create: false
+  secretKey: "postgres-password"
+  usernameKey: "postgres-username"
+  hostKey: "postgres-host"
+  portKey: "postgres-port"
+  databaseKey: "postgres-database"
+  sslmodeKey: "postgres-sslmode"

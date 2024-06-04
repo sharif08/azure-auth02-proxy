@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+
+resources:
+  - kustomization repo.yaml
+  - release.yaml
+  - db-secrets.yaml
+  - oauth2-proxy.yaml
+  - azure_secrets.yaml
+
+configMapGenerator:
+  - name: helm-values-configmap
+    namespace: kubeclarity
+    files:
+      - values.yaml

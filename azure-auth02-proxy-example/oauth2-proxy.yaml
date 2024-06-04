@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    application: nginx-oauth2-proxy
+  name: nginx-oauth2-proxy-deployment
+  namespace: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      application: nginx-oauth2-proxy
+  template:
+    metadata:
+      labels:
+        application: nginx-oauth2-proxy
+    spec:
+      containers:
+      - args:
+          - --provider=oidc
+          - --azure-tenant=<Tenant-ID>
+          - --pass-access-token=true
+          - --cookie-name=_proxycookie
+          - --email-domain=*
+          - --upstream=file:///dev/null
+          - --http-address=0.0.0.0:4180
+          - --oidc-issuer-url=https://login.microsoftonline.com/<Tenant-ID>/v2.0
+          - --redirect-url=https://nginx.test.com/oauth2/callback
+          - --cookie-secret=56d2bd247281e7dd9aad7e922935c9a5 # must be 16, 24, or 32 bytes long
+          - --whitelist-domain=nginx.test.com
+          - --oidc-extra-audience=<client_ID>
+        env:
+          - name: OAUTH2_PROXY_CLIENT_ID
+            valueFrom:
+              secretKeyRef:
+                name: client-id
+                key: oauth2_proxy_client_id
+          - name: OAUTH2_PROXY_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: client-secret
+                key: oauth2_proxy_client_secret
+        ports:
+          - containerPort: 4180
+        name: nginx-oauth2-proxy
+        image: quay.io/oauth2-proxy/oauth2-proxy:v7.4.0
+        imagePullPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    application: nginx-oauth2-proxy
+  name: nginx-oauth2-proxy-svc
+  namespace: nginx
+spec:
+  ports:
+  - name: http
+    port: 4180
+    protocol: TCP
+    targetPort: 4180
+  selector:
+    application: nginx-oauth2-proxy
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "2000m"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "32k"
+  name: nginx-oauth2-proxy-ingress
+  namespace: nginx
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - nginx.test.com
+      secretName: nginx-oauth2-proxy-ingress-tls-secret
+  rules:
+    - host: nginx.test1.com
+      http:
+        paths:
+          - path: /oauth2
+            pathType: Prefix
+            backend:
+              service:
+                name: nginx-oauth2-proxy-svc
+                port:
+                  number: 4180
